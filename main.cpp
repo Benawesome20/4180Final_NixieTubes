@@ -35,135 +35,71 @@
 * ownership rights.
 **********************************************************************/
 
+#include "mbed.h"
+#include "stdio.h"
 #include "ds3231.h"
 
 #define ESC 0x1B
 
 #define BLUETOOTH
 
-Serial bluemod(p28,p27);
+
+Ds3231 rtc(p9, p10); //rtc object
+Serial bluemod(p28,p27); // Bluetooth device
 BusOut Anodes(p11, p12, p13, p14);
 BusOut Digit(p24, p23, p22, p21);
 
+// RTC variables
+//default, use bit masks in ds3231.h for desired operation
+ds3231_cntl_stat_t rtc_control_status = {0,0}; 
+ds3231_time_t rtc_time;
+
+time_t epoch_time;
+Ticker timer;
+bool debug = 0;
+
+// User input functions
 void get_user_input(char* message, uint8_t min, uint8_t max, uint32_t* member);
 void get_user_input(char* message, uint8_t min, uint8_t max, bool* member);
 void get_bt_user_input(char* message, uint8_t min, uint8_t max, uint32_t* member);
 void get_bt_user_input(char* message, uint8_t min, uint8_t max, bool* member);
 
+// internal functions
 int fix_digit(int num);
 void show_time(int hour, int min);
-
+void update_epoch() {   epoch_time = rtc.get_epoch();   }
 
 int main(void)
-{
-    //rtc object
-    Ds3231 rtc(p9, p10); 
-    
-    time_t epoch_time;
-    
-    //DS3231 rtc variables
-    
-    //default, use bit masks in ds3231.h for desired operation
-    ds3231_cntl_stat_t rtc_control_status = {0,0}; 
-    ds3231_time_t rtc_time;
-    ds3231_calendar_t rtc_calendar;
-    
+{   
     rtc.set_cntl_stat_reg(rtc_control_status);
     
 #ifndef BLUETOOTH
-    //get day from user
-    get_user_input("\nPlease enter day of week, 1 for Sunday (1-7): ", 1,
-                    7, &rtc_calendar.day);
-
-    //get day of month from user
-    get_user_input("\nPlease enter day of month (1-31): ", 1, 31, 
-                    &rtc_calendar.date);
-
-    //get month from user
-    get_user_input("\nPlease enter the month, 1 for January (1-12): ", 1, 
-                    12, &rtc_calendar.month);
-
-    //get year from user
-    get_user_input("\nPlease enter the year (0-99): ",0, 99, 
-                    &rtc_calendar.year);
-      
-    //Get time mode
-    get_user_input("\nWhat time mode? 1 for 12hr 0 for 24hr: ", 0, 1, 
-                   &rtc_time.mode);  
+    // Ask for debug mode from user
+    get_user_input("\nTurn on debug? 0 for no, 1 for yes: ", 0, 1, &debug);
     
-    if(rtc_time.mode)
-    {
-        //Get AM/PM status
-        get_user_input("\nIs it AM or PM? 0 for AM 1 for PM: ", 0, 1, 
-                       &rtc_time.am_pm);  
-        //Get hour from user
-        get_user_input("\nPlease enter the hour (1-12): ", 1, 12, 
-                       &rtc_time.hours);
-    }
-    else
-    {
-        //Get hour from user
-        get_user_input("\nPlease enter the hour (0-23): ", 0, 23, 
-                       &rtc_time.hours);
-    }
-     
+    //Get hour from user
+    get_user_input("\nPlease enter the hour (0-23): ", 0, 23, &rtc_time.hours);
+                       
     //Get minutes from user
-    get_user_input("\nPlease enter the minute (0-59): ", 0, 59, 
-                   &rtc_time.minutes);
-    
+    get_user_input("\nPlease enter the minute (0-59): ", 0, 59, &rtc_time.minutes);
     
     //Get seconds from user
-    get_user_input("\nPlease enter the second (0-59): ", 0, 59,     
-                   &rtc_time.seconds);
+    get_user_input("\nPlease enter the second (0-59): ", 0, 59, &rtc_time.seconds);
 
     // If BLUETOOTH is defined, use bt inputs
 #else
-    //get day from user
-    get_bt_user_input("\nPlease enter day of week, 1 for Sunday (1-7): ", 1,
-                    7, &rtc_calendar.day);
-
-    //get day of month from user
-    get_bt_user_input("\nPlease enter day of month (1-31): ", 1, 31, 
-                    &rtc_calendar.date);
-
-    //get month from user
-    get_bt_user_input("\nPlease enter the month, 1 for January (1-12): ", 1, 
-                    12, &rtc_calendar.month);
-
-    //get year from user
-    get_bt_user_input("\nPlease enter the year (0-99): ",0, 99, 
-                    &rtc_calendar.year);
-      
-    //Get time mode
-    get_bt_user_input("\nWhat time mode? 1 for 12hr 0 for 24hr: ", 0, 1, 
-                   &rtc_time.mode);  
+    // Ask for debug mode from user
+    get_bt_user_input("\nTurn on debug? 0 for no, 1 for yes: ", 0, 1, &debug);
     
-    if(rtc_time.mode)
-    {
-        //Get AM/PM status
-        get_bt_user_input("\nIs it AM or PM? 0 for AM 1 for PM: ", 0, 1, 
-                       &rtc_time.am_pm);  
-        //Get hour from user
-        get_bt_user_input("\nPlease enter the hour (1-12): ", 1, 12, 
-                       &rtc_time.hours);
-    }
-    else
-    {
-        //Get hour from user
-        get_bt_user_input("\nPlease enter the hour (0-23): ", 0, 23, 
-                       &rtc_time.hours);
-    }
+    //Get hour from user
+    get_bt_user_input("\nPlease enter the hour (0-23): ", 0, 23, &rtc_time.hours);
      
     //Get minutes from user
-    get_bt_user_input("\nPlease enter the minute (0-59): ", 0, 59, 
-                   &rtc_time.minutes);
-    
+    get_bt_user_input("\nPlease enter the minute (0-59): ", 0, 59, &rtc_time.minutes);
     
     //Get seconds from user
-    get_bt_user_input("\nPlease enter the second (0-59): ", 0, 59, 
-                   &rtc_time.seconds);
+    get_bt_user_input("\nPlease enter the second (0-59): ", 0, 59, &rtc_time.seconds);
 #endif
-    
     
     //Set the time, uses inverted logic for return value
     if(rtc.set_time(rtc_time))
@@ -173,40 +109,26 @@ int main(void)
         exit(0);
     }
     
-    //Set the calendar, uses inverted logic for return value
-    if(rtc.set_calendar(rtc_calendar))
-    {
-        printf("\nrtc.set_calendar failed!!\n");
-        bluemod.printf("\nrtc.set_calendar failed!!\n");
-        exit(0);
-    }
-    
-    char buffer[32];
+    // Get time from RTC every second (to reduce load on mbed)
+    timer.attach(&update_epoch, 1);
+    tm calendar_time;
     
     for(;;)
     {   
-        // prints to both pc and bluetooth, covers both bases
-        printf("%c[2J", ESC); //clear screen
-        bluemod.printf("%c[2J", ESC);
-        printf("%c[H", ESC); //move cursor to Home
-        bluemod.printf("%c[H", ESC);
+        // convert epoch_time into hours and minutes
+        calendar_time = *localtime(&epoch_time);
+        int hours = int(calendar_time.tm_hour);
+        int minutes = int(calendar_time.tm_min);
         
-        //new epoch time fx
-        epoch_time = rtc.get_epoch();
+        // if debug mode, print out full time to pc and bluetooth every second
+        if (debug) {
+            printf("\n%s", ctime(&epoch_time));
+            bluemod.printf("\n%s", ctime(&epoch_time));
+            wait(1.0);
+        }
         
-        printf("\nTime as seconds since January 1, 1970 = %d\n", epoch_time);
-        bluemod.printf("\nTime as seconds since January 1, 1970 = %d\n", epoch_time);
-        
-        printf("\nTime as a basic string = %s", ctime(&epoch_time));
-        bluemod.printf("\nTime as a basic string = %s", ctime(&epoch_time));
- 
-        strftime(buffer, 32, "%I:%M %p\n", localtime(&epoch_time));
-        printf("\nTime as a custom formatted string = %s", buffer);
-        bluemod.printf("\nTime as a custom formatted string = %s", buffer);
-        
-        show_time(localtime(&epoch_time).tm_hour, localtime(&epoch_time).tm_min);
-        
-        wait(1.0);
+        // Send time to nixie tubes in 24hr format
+        show_time(hours, minutes);
     }//loop 
 }
 
@@ -355,8 +277,6 @@ int fix_digit(int num)
 * Returns: none
 *
 * Description: Displays the hour and minutes on the nixie tubes
-*              
-*
 **********************************************************************/
 void show_time(int hour, int min)
 {  
